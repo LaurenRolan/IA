@@ -46,7 +46,6 @@ def createLabyrinth(labyrinth, positions):
 
 def get_sucessor_states(x,y,labyrinth):
     sucessor = []
-    print(x, y)
     if y < len(labyrinth[0]) - 1 and labyrinth[y + 1][x] == 1:
         sucessor.append((x, y + 1))
     if y > 0 and labyrinth[y - 1][x] == 1:
