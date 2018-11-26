@@ -1,75 +1,95 @@
-# -*- coding: utf-8; mode: python -*-
-
+# -*- coding: utf-8 -*-
+#
 # ENSICAEN
 # École Nationale Supérieure d'Ingénieurs de Caen
 # 6 Boulevard Maréchal Juin
 # F-14050 Caen Cedex France
 #
 # Artificial Intelligence 2I1AE1
+#
 
+#
 # @file agents.py
 #
-# @author Régis Clouard
+# @author Régis Clouard.
+#
 
-from board import Board
-from collections import deque
+from grid import Grid
 import random
+from samples import *
 import copy
 
-MAX_PATH_LENGTH = 100
-
-class Solver:
+class Agent:
     """
-    Abstract class for the solvers that implement the
-    various search strategies.
-    It is based on the Design Pattern Strategy (abstract
-    method is search()).
-
+    Abstract class for the solvers that implements the
+    Strategy design pattern.
     YOU DO NOT NEED TO CHANGE ANYTHING IN THIS CLASS, EVER.
     """
     def __init__( self ):
-        self.count = 0
+        self.count = 0;
+        self.clock = ['|', '/', '-', '\\']
 
-    def search( self, initial_state ):
-        """ This is the method to implement for each specific searcher."""
-        raise Exception, "Invalid Solver class, search() not implemented"
-
-#######
-####### Depth-First Search
-#######
-class DFS( Solver ):
-    
-    def search( self, initial_state ):
-        """ Depth-First Search using a stack.
+    def incrementCount( self):
+        self.count += 1;
+        self.displayTime()
         
-        It returns the path as a list of boards (states).
+    def displayTime( self ):
+        print "\b\b\b" + self.clock[self.count % 4], 
+
+    def solve( self, grid ):
+        """ This is the method to implement for each specific solver."""
+        raise Exception, "Invalid CSPSolver class, Solve() not implemented"
+
+#######
+####### Backtracking Search Agent
+#######    
+class BS( Agent ):
+    """ Backtracking version of the solver based on simple
+    uninformed backtracking search: recursive depth-first search."""
+    
+    def solve( self, grid ):
+        """ Returns a solution as a dictionary of assignment
+        eg: {0:'2', 1:'3', ..., 40:'5'}
+        or None if no solution is found.
+        @param grid a reference to the current puzzle grid."""
+        domains = grid.getDomainValues()
+        return self.__recursiveBacktracking(grid, domains, {})
+
+    def __recursiveBacktracking( self, grid, domains, assignment ):
+        """ Implements a recursive search.
+        Returns the solution as list or None. """
+        self.incrementCount()
+        if len(domains) == 0: # All cells set
+            if self.__isGoal(grid, assignment):
+                return assignment
+            return None
+
+        variable, values =  domains.popitem()
+        newAssignment = copy.deepcopy(assignment)
+        for value in values:
+            # Use a deep copy of domains to avoid backtracking issues.
+            newAssignment[variable] = value
+            solution = self.__recursiveBacktracking(grid, copy.deepcopy(domains), newAssignment)
+            if solution:
+                return solution
+        return None
+
+    def __isGoal( self, grid, assignment ):
+        """ Tests if the assignment is a solution.
+        ie. that there is not doubles in each boxes, lines and columns.
+        @param assignment a dictionary with the current assignment.
         """
+        for variable, value in assignment.iteritems():
+            for cell in grid.getRelatedCells(variable):
+                if assignment[variable] == assignment[cell]:
+                    return False
+        return True
 
-        # Create initial stack with the initial state (the start position)
-        lifo = [ [initial_state] ]
-        visited = set([initial_state]) # keep already explored positions
-        while lifo:
-            self.count += 1
-            # Get the path at the top of the stack
-            current_path = lifo.pop()
-            # Get the last place of that path
-            current_state = current_path[-1]
-
-            # board.display(current_path)
-            # raw_input("Next")
-
-            # Check if we have reached the goal
-            if current_state.is_goal():
-                return current_path
-            else:
-                # Check where we can go from here
-                next_states = current_state.get_successors()
-                # Add the new paths (one step longer) to the stack
-                for state in next_states:
-                    if state not in visited: # Avoid loop!
-                        visited.add(state)
-                        lifo.append(current_path + [state])
-        return [] # No solution
+def defaultHeuristic( domains, assignment, grid ):
+    """ Picks the first free variable."""
+    for cell, p in domains.iteritems():
+        if cell not in assignment:
+            return cell
 
 #  ______                   _            __ 
 # |  ____|                 (_)          /_ |
@@ -78,37 +98,46 @@ class DFS( Solver ):
 # | |____ >  <  __/ | | (__| \__ \  __/  | |
 # |______/_/\_\___|_|  \___|_|___/\___|  |_|
 
-class BFS( Solver ):
-    def search( self, initial_state ):
-        """ Breadth-First Search using a queue
+class FC( Agent ):
+    def solve( self, grid, heuristicFunction = defaultHeuristic ):
+        """ Forward Checking.
 
-        It returns the path as a list of boards (states).
+        Returns a solution as a dictionary of assignment, eg: {0:'2', 1:'3', ...40:'5'}
+        or None if no solution is found.
+        @param grid the current puzzle grid.
+        @param heuristicFunction the function used to choose the next cell to considered.
         """
-        # Create initial stack with the initial state (the start position)
-        fifo = [ [initial_state] ]
-        visited = set([initial_state]) # keep already explored positions
-        while fifo:
-            self.count += 1
-            # Get the path at the top of the stack
-            current_path = fifo.pop()
-            # Get the last place of that path
-            current_state = current_path[-1]
-
-            # board.display(current_path)
-            # raw_input("Next")
-
-            # Check if we have reached the goal
-            if current_state.is_goal():
-                return current_path
+        return self.recursiveSearch({}, grid.getDomainValues(), grid, heuristicFunction)
+        
+    def recursiveSearch(self, assignment, domains, grid, heuristicFunction):
+        self.incrementCount()
+        print "#" + str(self.count)
+        if domains.keys() == assignment.keys():
+            if all(assignment[key] for key in assignment.keys()):
+                return assignment
             else:
-                # Check where we can go from here
-                next_states = current_state.get_successors()
-                # Add the new paths (one step longer) to the stack
-                for state in next_states:
-                    if state not in visited: # Avoid loop!
-                        visited.add(state)
-                        fifo.insert(0, current_path + [state])
-        return [] # No solution
+                return None
+        current = heuristicFunction(domains, assignment, grid)
+        for value in domains[current]:
+            if current not in assignment:
+                assignment[current] = list()
+            assignment[current].append(value)
+            domains1 = self.forwardChecking(current, value, copy.deepcopy(domains), grid)
+            if domains1 != None:
+                result = self.recursiveSearch(assignment, domains1, grid, heuristicFunction)
+                if result != None:
+                    return assignment
+            assignment[current].remove(value)
+        return None
+    
+    def forwardChecking(self, var, value, domain, grid):
+        list_of_dependencies = grid.getRelatedCells(var)
+        for dep in list_of_dependencies:
+            if value in domain[dep]:
+                domain[dep].remove(value)
+                if not domain[dep]:
+                    return None
+        return domain
 
 #  ______                   _            ___  
 # |  ____|                 (_)          |__ \ 
@@ -116,114 +145,34 @@ class BFS( Solver ):
 # |  __| \ \/ / _ \ '__/ __| / __|/ _ \   / / 
 # | |____ >  <  __/ | | (__| \__ \  __/  / /_ 
 # |______/_/\_\___|_|  \___|_|___/\___| |____|
+ 
+def myHeuristic( domains, assignment, grid ):
+    """ A clever heuritic for choosing the next cell to consider.
 
-def my_heuristic( state ):
-    """ Heuristic value.
-    
-    """
-    board = state.get_board()
-    tip = 2
-    value = 0
-    for i in range(2, len(board)):
-    	#Find tip of car
-    	if board[2][i] == 'X':
-    		tip = i
-    	#If it is not in the exit
-    	elif i > tip:
-    		#If there is something between the exit and the car
-    		if board[2][i] != ' ':
-    			value += 5
-    return value
+    Returns the cell index from 0..N. """
 
-#######
-####### Greedy Best First Search
-#######
-class GBFS( Solver ):
-
-    def search( self, initial_state ):
-        """
-        Greedy Best-First Search.
-        
-        It returns the path as a list of boards (states).
-        """
-
-        from utils import PriorityQueue
-        priority_queue = PriorityQueue()
-        h = my_heuristic(initial_state)
-        priority_queue.push([initial_state], h)
-        visited = set([initial_state]) # keep already explored positions
-
-        while not priority_queue.isEmpty():
-            self.count += 1
-            # Get the path at the top of the queue
-            current_path, cost = priority_queue.pop()
-            # Get the last place of that path
-            current_state = current_path[-1]
-
-            # board.display(current_path)
-            # raw_input("Next")
-
-            # Check if we have reached the goal
-            if current_state.is_goal():
-                return current_path
-            else:
-                # Check where we can go from here
-                next_states = current_state.get_successors()
-                # Add the new paths (one step longer) to the queue
-                for state in next_states:
-                    if state not in visited: # Avoid loop!
-                        visited.add(state)
-                        h = my_heuristic(state)
-                        priority_queue.push((current_path + [ (state) ]), h )
-
-        return [] # No solution
+    "*** YOUR CODE HERE ***"
+    raise Exception, "Method not implemented: myHeuristics()"
 
 #  ______                   _            ____  
 # |  ____|                 (_)          |___ \ 
 # | |__  __  _____ _ __ ___ _ ___  ___    __) |
 # |  __| \ \/ / _ \ '__/ __| / __|/ _ \  |__ < 
 # | |____ >  <  __/ | | (__| \__ \  __/  ___) |
-# |______/_/\_\___|_|  \___|_|___/\___| |____/ 
+# |______/_/\_\___|_| \___|_|___/\___| |____/ 
 
-class AS( Solver ):
+class AC3( Agent ):
+    def solve( self, grid, heuristicFunction = defaultHeuristic ):
+        """ Arc Consistency as preprocessing.
+        Returns the domain of values after applying
+        the arc consistency technique.
 
-    def search( self, initial_state ):
-        """
-        A* Search.
+        @param grid the current puzzle grid.
+        @param heuristicFunction the function is used to choose the next cell to considered."""
 
-        It returns the path as a list of boards (states).
-        """
-        from utils import PriorityQueue
-        priority_queue = PriorityQueue()
-        h = my_heuristic(initial_state)
-        g = 0
-        priority_queue.push([initial_state], h)
-        visited = set([initial_state]) # keep already explored positions
+        "*** YOUR CODE HERE ***"
+        raise Exception, "Method not implemented: solve()"
 
-        while not priority_queue.isEmpty():
-            self.count += 1
-            # Get the path at the top of the queue
-            current_path, cost = priority_queue.pop()
-            # Get the last place of that path
-            current_state = current_path[-1]
-
-            # board.display(current_path)
-            # raw_input("Next")
-
-            # Check if we have reached the goal
-            if current_state.is_goal():
-                return current_path
-            else:
-                # Check where we can go from here
-                next_states = current_state.get_successors()
-                # Add the new paths (one step longer) to the queue
-                for state in next_states:
-                    if state not in visited: # Avoid loop!
-                        visited.add(state)
-                        h = my_heuristic(state)
-                        priority_queue.push((current_path + [ (state) ]), h + g)
-                    	g += 1
-        return [] # No solution
 #  ______                   _            _  _   
 # |  ____|                 (_)          | || |  
 # | |__  __  _____ _ __ ___ _ ___  ___  | || |_ 
@@ -231,38 +180,17 @@ class AS( Solver ):
 # | |____ >  <  __/ | | (__| \__ \  __/    | |  
 # |______/_/\_\___|_|  \___|_|___/\___|    |_|  
 
-class IDS( Solver ):
+class AC_FC( Agent ):
+    def solve( self, grid, heuristicFunction = defaultHeuristic ):
+        """ Forward Checking with Arc Consistency as preprocessing.
+        Returns a solution as a dictionary of assignment, eg: {0:'2', 1:'3', ...40:'5'}
+        or None if no solution is found.
 
-    def search( self, initial_state ):
-        """ Iterative Deepening Search.
-        
-        It returns the path as a list of boards (states).
-        """
-        for depth in range(2, 100):
-        	explored = {}
-	        lifo = [ [initial_state] ]
-	        while lifo:
-	            self.count += 1
-	            # Get the path at the top of the stack
-	            current_path = lifo.pop()
-	            # Get the last place of that path
-	            current_state = current_path[-1]
+        @param grid the current puzzle grid.
+        @param heuristicFunction the function used to choose the next cell to considered."""
 
-	            # board.display(current_path)
-	            # raw_input("Next")
-
-	            # Check if we have reached the goal
-	            if current_state.is_goal():
-	                return current_path
-	            elif len(current_path) < depth:
-	                # Check where we can go from here
-	                next_states = current_state.get_successors()
-	                # Add the new paths (one step longer) to the stack
-	                for state in next_states:
-	                    if state not in explored or explored[state] > len(current_path): # Avoid loop!
-	                        explored[state] = len(current_path)
-	                        lifo.append(current_path + [state])
-	return [] # No solution
+        "*** YOUR CODE HERE ***"
+        raise Exception, "Method not implemented: solve()"
 
 #  ______                   _            _____ 
 # |  ____|                 (_)          | ____|
@@ -270,83 +198,14 @@ class IDS( Solver ):
 # |  __| \ \/ / _ \ '__/ __| / __|/ _ \ |___ \ 
 # | |____ >  <  __/ | | (__| \__ \  __/  ___) |
 # |______/_/\_\___|_|  \___|_|___/\___| |____/ 
+                                              
+class AC_AC( Agent ):
+    def solve( self, grid, heuristicFunction = defaultHeuristic ):
+        """ Maintaining Arc Consistency.
+        Returns a solution as a list of assignment, eg: ['2', '3', ...'5']
+        for each cell of the grid.
+        @param grid the current puzzle grid.
+        @param heuristicFunction the function used to choose the next cell to considered."""
 
-class UCS( Solver ):
-
-    def search( self, initial_state ):
-        """
-        Uniform-Costs Search.
-        
-        It returns the path as a list of boards (states).
-        """
-        from utils import PriorityQueue
-        priority_queue = PriorityQueue()
-        priority_queue.push([initial_state], 0)
-        visited = set([initial_state]) # keep already explored positions
-        g = 0
-        while not priority_queue.isEmpty():
-            self.count += 1
-            # Get the path at the top of the stack
-            current_path, cost = priority_queue.pop()
-            # Get the last place of that path
-            current_state = current_path[-1]
-
-            # Check if we have reached the goal
-            if current_state.is_goal():
-                return current_path
-            else:
-                # Check where we can go from here
-                next_states = current_state.get_successors()
-                # Add the new paths (one step longer) to the stack
-                for state in next_states:
-                    if state not in visited: # Avoid loop!
-                        visited.add(state)
-                        priority_queue.push(current_path + [state], g)
-                g += 1
-        return [] # No solution
-
-#  ______                   _              __  
-# |  ____|                 (_)            / /  
-# | |__  __  _____ _ __ ___ _ ___  ___   / /_  
-# |  __| \ \/ / _ \ '__/ __| / __|/ _ \ | '_ \ 
-# | |____ >  <  __/ | | (__| \__ \  __/ | (_) |
-# |______/_/\_\___|_|  \___|_|___/\___|  \___/ 
-
-class IDAS( Solver ):
-
-    def search( self, initial_state ):
-        """ Iterative A* using a stack.
-        
-        It returns the path as a list of boards (states).
-        """
-        from utils import PriorityQueue
-        for depth in range(2, 100): 
-	        priority_queue = PriorityQueue()
-	        h = my_heuristic(initial_state)
-	        g = 0
-	        priority_queue.push([initial_state], h)
-	        explored = {}
-	        while not priority_queue.isEmpty():
-	            self.count += 1
-	            # Get the path at the top of the queue
-	            current_path, cost = priority_queue.pop()
-	            # Get the last place of that path
-	            current_state = current_path[-1]
-
-	            # board.display(current_path)
-	            # raw_input("Next")
-
-	            # Check if we have reached the goal
-	            if current_state.is_goal():
-	                return current_path
-	            elif len(current_path) < depth:
-	                # Check where we can go from here
-	                next_states = current_state.get_successors()
-	                # Add the new paths (one step longer) to the queue
-	                for state in next_states:
-	                    if state not in explored or explored[state] > len(current_path): # Avoid loop!
-	                        explored[state] = len(current_path)
-	                        h = my_heuristic(state)
-	                        priority_queue.push((current_path + [ (state) ]), h + g)
-	                    	g += 1
-        return [] # No solution
+        "*** YOUR CODE HERE ***"
+        raise Exception, "Method not implemented: solve()"
