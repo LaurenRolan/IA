@@ -90,6 +90,7 @@ def defaultHeuristic( domains, assignment, grid ):
     for cell, p in domains.iteritems():
         if cell not in assignment:
             return cell
+                               
 
 #  ______                   _            __ 
 # |  ____|                 (_)          /_ |
@@ -111,23 +112,18 @@ class FC( Agent ):
         
     def recursiveSearch(self, assignment, domains, grid, heuristicFunction):
         self.incrementCount()
-        print "#" + str(self.count)
         if domains.keys() == assignment.keys():
-            if all(assignment[key] for key in assignment.keys()):
+            if all(domains[key] for key in assignment.keys()):
                 return assignment
-            else:
-                return None
         current = heuristicFunction(domains, assignment, grid)
         for value in domains[current]:
-            if current not in assignment:
-                assignment[current] = list()
-            assignment[current].append(value)
+            assignment[current] = value
             domains1 = self.forwardChecking(current, value, copy.deepcopy(domains), grid)
             if domains1 != None:
                 result = self.recursiveSearch(assignment, domains1, grid, heuristicFunction)
                 if result != None:
                     return assignment
-            assignment[current].remove(value)
+            del assignment[current]
         return None
     
     def forwardChecking(self, var, value, domain, grid):
@@ -146,13 +142,12 @@ class FC( Agent ):
 # | |____ >  <  __/ | | (__| \__ \  __/  / /_ 
 # |______/_/\_\___|_|  \___|_|___/\___| |____|
  
-def myHeuristic( domains, assignment, grid ):
-    """ A clever heuritic for choosing the next cell to consider.
-
-    Returns the cell index from 0..N. """
-
-    "*** YOUR CODE HERE ***"
-    raise Exception, "Method not implemented: myHeuristics()"
+def myHeuristic(domains, assignment, grid):
+    """ The best heuristic """
+    for cell, p in domains.iteritems():
+        if cell not in assignment:
+            if len(p) < 3:
+                return cell
 
 #  ______                   _            ____  
 # |  ____|                 (_)          |___ \ 
